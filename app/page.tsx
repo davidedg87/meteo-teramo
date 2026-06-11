@@ -12,7 +12,7 @@ import PressureChart from '@/components/PressureChart';
 import HistoricalChart from '@/components/HistoricalChart';
 import AutoRefresh from '@/components/AutoRefresh';
 
-export const revalidate = 600;
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const [weather, airQualityResult, historicalResult] = await Promise.allSettled([
