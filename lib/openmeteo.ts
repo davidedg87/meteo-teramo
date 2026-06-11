@@ -23,6 +23,7 @@ export interface WeatherData {
     precipitation_probability: number[];
     precipitation: number[];
     wind_speed_10m: number[];
+    surface_pressure: number[];
   };
   daily: {
     time: string[];
@@ -61,6 +62,7 @@ export async function fetchWeather(): Promise<WeatherData> {
       'precipitation_probability',
       'precipitation',
       'wind_speed_10m',
+      'surface_pressure',
     ].join(','),
     daily: [
       'weather_code',

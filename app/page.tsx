@@ -8,6 +8,7 @@ import AirQuality from '@/components/AirQuality';
 import TemperatureChart from '@/components/TemperatureChart';
 import DailyForecast from '@/components/DailyForecast';
 import HourlyTable from '@/components/HourlyTable';
+import PressureChart from '@/components/PressureChart';
 import HistoricalChart from '@/components/HistoricalChart';
 import AutoRefresh from '@/components/AutoRefresh';
 
@@ -21,7 +22,15 @@ export default async function Home() {
   ]);
 
   if (weather.status === 'rejected') {
-    throw new Error('Impossibile caricare i dati meteo.');
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950/30 to-slate-950 text-white flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-2xl">⛅</p>
+          <p className="text-slate-300 font-medium">Dati meteo temporaneamente non disponibili</p>
+          <p className="text-slate-500 text-sm">Riprova tra qualche minuto</p>
+        </div>
+      </main>
+    );
   }
 
   const w = weather.value;
@@ -38,6 +47,7 @@ export default async function Home() {
       precipitation_probability: w.hourly.precipitation_probability[i],
       precipitation: w.hourly.precipitation[i],
       wind_speed_10m: w.hourly.wind_speed_10m[i],
+      surface_pressure: w.hourly.surface_pressure[i],
     }))
     .filter(d => new Date(d.time) >= now);
 
@@ -59,6 +69,7 @@ export default async function Home() {
         {airQuality && <AirQuality data={airQuality} />}
 
         <TemperatureChart data={hourlyData.slice(0, 48)} />
+        <PressureChart data={hourlyData.slice(0, 48)} />
         <DailyForecast daily={w.daily} />
         <HourlyTable data={hourlyData} />
 
