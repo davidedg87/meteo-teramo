@@ -86,7 +86,7 @@ export default async function Home({ searchParams }: PageProps) {
     .filter(d => new Date(d.time) >= now);
 
   const elevation = Math.round(w.elevation);
-  const locationName = loc ? `Meteo ${loc.name}` : 'Previsioni personalizzate';
+  const cityName = loc ? loc.name : 'Posizione personalizzata';
   const subtitle = hasCustomPos
     ? `${customLat!.toFixed(4)}°N · ${customLon!.toFixed(4)}°E · ${elevation} m s.l.m.`
     : (loc!.description ? `${loc!.description} · ${elevation} m s.l.m.` : `${elevation} m s.l.m.`);
@@ -99,7 +99,8 @@ export default async function Home({ searchParams }: PageProps) {
 
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">{locationName}</h1>
+            <h1 className="text-2xl font-bold text-white">Meteo Provincia di Teramo</h1>
+            <p className="text-slate-300 text-base font-medium">{cityName}</p>
             <p className="text-slate-400 text-sm">{subtitle}</p>
           </div>
           <AutoRefresh updatedAt={fmtTime(w.current.time)} />
