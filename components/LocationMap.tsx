@@ -1,10 +1,17 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { LOCATIONS } from '@/lib/locations';
+
+// Teramo province bounding box (with padding)
+const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
+  [42.37, 13.28],
+  [43.02, 14.22],
+];
 
 const ZONE_COLOR: Record<string, string> = {
   costa:    '#3b82f6',
@@ -46,58 +53,74 @@ interface Props {
 
 export default function LocationMap({ currentSlug, customLat, customLon }: Props) {
   const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
-      <div style={{ height: 300 }}>
-        <MapContainer
-          center={[42.66, 13.70]}
-          zoom={10}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-        >
-          <ZoomControl position="bottomright" />
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>'
-          />
+      <button
+        onClick={() => setIsOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-400 hover:text-white transition-colors"
+      >
+        <span>Mappa della provincia</span>
+        <span className="text-slate-600 text-xs">{isOpen ? '▲ Chiudi' : '▼ Espandi'}</span>
+      </button>
 
-          <ClickHandler
-            onMapClick={(lat, lon) =>
-              router.push(`/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
-            }
-          />
-
-          {LOCATIONS.map(loc => (
-            <Marker
-              key={loc.slug}
-              position={[loc.lat, loc.lon]}
-              icon={dot(ZONE_COLOR[loc.zone], loc.slug === currentSlug)}
-              eventHandlers={{
-                click: () => router.push(loc.slug === 'teramo' ? '/' : `/?loc=${loc.slug}`),
-              }}
+      {isOpen && (
+        <>
+          <div style={{ height: 300 }} className="border-t border-white/5">
+            <MapContainer
+              center={[42.66, 13.70]}
+              zoom={10}
+              minZoom={9}
+              maxBounds={PROVINCE_BOUNDS}
+              maxBoundsViscosity={1.0}
+              style={{ height: '100%', width: '100%' }}
+              zoomControl={false}
             >
-              <Tooltip direction="top" offset={[0, -4]} opacity={1}>
-                <span style={{ fontSize: 12, fontWeight: 500 }}>{loc.name}</span>
-                <span style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }}>{loc.elevation} m</span>
-              </Tooltip>
-            </Marker>
-          ))}
+              <ZoomControl position="bottomright" />
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>'
+              />
 
-          {customLat != null && customLon != null && (
-            <Marker position={[customLat, customLon]} icon={customDot()}>
-              <Tooltip direction="top" offset={[0, -5]} opacity={1}>
-                <span style={{ fontSize: 11 }}>
-                  {customLat.toFixed(4)}°N, {customLon.toFixed(4)}°E
-                </span>
-              </Tooltip>
-            </Marker>
-          )}
-        </MapContainer>
-      </div>
-      <p className="text-slate-600 text-xs text-center py-1.5 border-t border-white/5">
-        Clicca su un marker per i comuni · Clicca su un punto qualsiasi per previsioni personalizzate
-      </p>
+              <ClickHandler
+                onMapClick={(lat, lon) =>
+                  router.push(`/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
+                }
+              />
+
+              {LOCATIONS.map(loc => (
+                <Marker
+                  key={loc.slug}
+                  position={[loc.lat, loc.lon]}
+                  icon={dot(ZONE_COLOR[loc.zone], loc.slug === currentSlug)}
+                  eventHandlers={{
+                    click: () => router.push(loc.slug === 'teramo' ? '/' : `/?loc=${loc.slug}`),
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -4]} opacity={1}>
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>{loc.name}</span>
+                    <span style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }}>{loc.elevation} m</span>
+                  </Tooltip>
+                </Marker>
+              ))}
+
+              {customLat != null && customLon != null && (
+                <Marker position={[customLat, customLon]} icon={customDot()}>
+                  <Tooltip direction="top" offset={[0, -5]} opacity={1}>
+                    <span style={{ fontSize: 11 }}>
+                      {customLat.toFixed(4)}°N, {customLon.toFixed(4)}°E
+                    </span>
+                  </Tooltip>
+                </Marker>
+              )}
+            </MapContainer>
+          </div>
+          <p className="text-slate-600 text-xs text-center py-1.5 border-t border-white/5">
+            Clicca su un marker per i comuni · Clicca su un punto qualsiasi per previsioni personalizzate
+          </p>
+        </>
+      )}
     </div>
   );
 }
