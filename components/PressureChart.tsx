@@ -52,7 +52,7 @@ export default function PressureChart({ data }: Props) {
         <span className="text-xs text-slate-500">Prossime 48 ore · hPa</span>
       </div>
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+        <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 10, left: -10 }}>
           <defs>
             <linearGradient id="pressGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#a78bfa" stopOpacity={0.35} />
@@ -62,10 +62,13 @@ export default function PressureChart({ data }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
             dataKey="ora"
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#64748b', fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            interval={3}
+            interval={5}
+            angle={-45}
+            textAnchor="end"
+            height={48}
           />
           <YAxis
             domain={[minP, maxP]}

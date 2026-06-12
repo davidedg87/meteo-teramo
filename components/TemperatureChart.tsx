@@ -57,7 +57,7 @@ export default function TemperatureChart({ data }: Props) {
     <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
       <h2 className="text-slate-300 text-sm uppercase tracking-widest mb-6">Prossime 48 ore</h2>
       <ResponsiveContainer width="100%" height={260}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+        <ComposedChart data={chartData} margin={{ top: 5, right: 5, bottom: 10, left: -10 }}>
           <defs>
             <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#f97316" stopOpacity={0.3} />
@@ -67,10 +67,13 @@ export default function TemperatureChart({ data }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis
             dataKey="ora"
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#64748b', fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            interval={3}
+            interval={5}
+            angle={-45}
+            textAnchor="end"
+            height={48}
           />
           <YAxis
             yAxisId="temp"
