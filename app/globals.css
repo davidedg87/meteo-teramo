@@ -13,3 +13,30 @@ html {
 body {
   background-color: #0f172a;
 }
+
+/* Leaflet map */
+.leaflet-container {
+  cursor: crosshair;
+  background: #0f172a;
+}
+.leaflet-marker-icon {
+  cursor: pointer !important;
+}
+.leaflet-tooltip {
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.leaflet-tooltip::before {
+  border-top-color: rgba(255,255,255,0.1);
+}
+.leaflet-control-attribution {
+  background: rgba(15,23,42,0.7) !important;
+  color: #475569 !important;
+}
+.leaflet-control-attribution a {
+  color: #64748b !important;
+}

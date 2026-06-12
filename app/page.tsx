@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import nextDynamic from 'next/dynamic';
 import { fetchWeather } from '@/lib/openmeteo';
 import { fetchAirQuality } from '@/lib/airquality';
 import { fetchHistorical } from '@/lib/historical';
@@ -14,19 +16,38 @@ import HistoricalChart from '@/components/HistoricalChart';
 import AutoRefresh from '@/components/AutoRefresh';
 import LocationSelector from '@/components/LocationSelector';
 
+const LocationMap = nextDynamic(() => import('@/components/LocationMap'), { ssr: false });
+
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: { loc?: string };
+  searchParams: { loc?: string; lat?: string; lon?: string };
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const customLat = searchParams.lat ? parseFloat(searchParams.lat) : null;
+  const customLon = searchParams.lon ? parseFloat(searchParams.lon) : null;
+  const hasCustomPos = customLat != null && customLon != null && !isNaN(customLat) && !isNaN(customLon);
+
+  if (hasCustomPos) return { title: 'Posizione personalizzata' };
+  const loc = getLocation(searchParams.loc);
+  if (loc.slug === 'teramo') return {};
+  return { title: `Meteo ${loc.name}` };
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const loc = getLocation(searchParams.loc);
+  const customLat = searchParams.lat ? parseFloat(searchParams.lat) : null;
+  const customLon = searchParams.lon ? parseFloat(searchParams.lon) : null;
+  const hasCustomPos = customLat != null && customLon != null && !isNaN(customLat) && !isNaN(customLon);
+
+  const loc = hasCustomPos ? null : getLocation(searchParams.loc);
+  const lat = hasCustomPos ? customLat! : loc!.lat;
+  const lon = hasCustomPos ? customLon! : loc!.lon;
 
   const [weather, airQualityResult, historicalResult] = await Promise.allSettled([
-    fetchWeather(loc.lat, loc.lon),
-    fetchAirQuality(loc.lat, loc.lon),
-    fetchHistorical(loc.lat, loc.lon),
+    fetchWeather(lat, lon),
+    fetchAirQuality(lat, lon),
+    fetchHistorical(lat, lon),
   ]);
 
   if (weather.status === 'rejected') {
@@ -65,9 +86,12 @@ export default async function Home({ searchParams }: PageProps) {
     .filter(d => new Date(d.time) >= now);
 
   const elevation = Math.round(w.elevation);
-  const subtitle = loc.description
-    ? `${loc.description} · ${elevation} m s.l.m.`
-    : `${elevation} m s.l.m.`;
+  const locationName = loc ? `Meteo ${loc.name}` : 'Previsioni personalizzate';
+  const subtitle = hasCustomPos
+    ? `${customLat!.toFixed(4)}°N · ${customLon!.toFixed(4)}°E · ${elevation} m s.l.m.`
+    : (loc!.description ? `${loc!.description} · ${elevation} m s.l.m.` : `${elevation} m s.l.m.`);
+
+  const currentSlug = loc?.slug ?? null;
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950/30 to-slate-950 text-white">
@@ -75,13 +99,14 @@ export default async function Home({ searchParams }: PageProps) {
 
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Meteo {loc.name}</h1>
+            <h1 className="text-2xl font-bold text-white">{locationName}</h1>
             <p className="text-slate-400 text-sm">{subtitle}</p>
           </div>
           <AutoRefresh updatedAt={fmtTime(w.current.time)} />
         </header>
 
-        <LocationSelector currentSlug={loc.slug} />
+        <LocationSelector currentSlug={currentSlug} />
+        <LocationMap currentSlug={currentSlug} customLat={customLat} customLon={customLon} />
 
         <CurrentWeather current={w.current} daily={w.daily} />
         <MetricsGrid current={w.current} />

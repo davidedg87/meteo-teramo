@@ -11,13 +11,13 @@ const ZONE_META: Record<string, { label: string; icon: string }> = {
 };
 
 interface Props {
-  currentSlug: string;
+  currentSlug: string | null;
 }
 
 function Pill({ slug, name, currentSlug, onSelect }: {
   slug: string;
   name: string;
-  currentSlug: string;
+  currentSlug: string | null;
   onSelect: () => void;
 }) {
   const href = slug === 'teramo' ? '/' : `/?loc=${slug}`;
