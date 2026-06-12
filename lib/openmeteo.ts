@@ -15,15 +15,24 @@ export interface WeatherData {
     uv_index: number;
     weather_code: number;
     is_day: number;
+    cloud_cover: number;
+    visibility: number;
+    snow_depth: number;
+    freezing_level_height: number;
   };
   hourly: {
     time: string[];
     temperature_2m: number[];
+    apparent_temperature: number[];
+    dew_point_2m: number[];
     relative_humidity_2m: number[];
     precipitation_probability: number[];
     precipitation: number[];
     wind_speed_10m: number[];
     surface_pressure: number[];
+    cloud_cover: number[];
+    visibility: number[];
+    uv_index: number[];
   };
   daily: {
     time: string[];
@@ -31,18 +40,23 @@ export interface WeatherData {
     temperature_2m_max: number[];
     temperature_2m_min: number[];
     precipitation_sum: number[];
+    rain_sum: number[];
+    snowfall_sum: number[];
     precipitation_probability_max: number[];
     wind_speed_10m_max: number[];
+    wind_direction_10m_dominant: number[];
     uv_index_max: number[];
     sunrise: string[];
     sunset: string[];
+    sunshine_duration: number[];
+    daylight_duration: number[];
   };
 }
 
-export async function fetchWeather(): Promise<WeatherData> {
+export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
   const params = new URLSearchParams({
-    latitude: '42.6589',
-    longitude: '13.7036',
+    latitude: String(lat),
+    longitude: String(lon),
     current: [
       'temperature_2m',
       'relative_humidity_2m',
@@ -55,25 +69,39 @@ export async function fetchWeather(): Promise<WeatherData> {
       'uv_index',
       'weather_code',
       'is_day',
+      'cloud_cover',
+      'visibility',
+      'snow_depth',
+      'freezing_level_height',
     ].join(','),
     hourly: [
       'temperature_2m',
+      'apparent_temperature',
+      'dew_point_2m',
       'relative_humidity_2m',
       'precipitation_probability',
       'precipitation',
       'wind_speed_10m',
       'surface_pressure',
+      'cloud_cover',
+      'visibility',
+      'uv_index',
     ].join(','),
     daily: [
       'weather_code',
       'temperature_2m_max',
       'temperature_2m_min',
       'precipitation_sum',
+      'rain_sum',
+      'snowfall_sum',
       'precipitation_probability_max',
       'wind_speed_10m_max',
+      'wind_direction_10m_dominant',
       'uv_index_max',
       'sunrise',
       'sunset',
+      'sunshine_duration',
+      'daylight_duration',
     ].join(','),
     timezone: 'Europe/Rome',
     forecast_days: '7',

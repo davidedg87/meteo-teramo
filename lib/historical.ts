@@ -7,7 +7,7 @@ export interface HistoricalData {
   };
 }
 
-export async function fetchHistorical(): Promise<HistoricalData> {
+export async function fetchHistorical(lat: number, lon: number): Promise<HistoricalData> {
   const fmt = (d: Date) => d.toISOString().split('T')[0];
   const end = new Date();
   end.setDate(end.getDate() - 1);
@@ -15,8 +15,8 @@ export async function fetchHistorical(): Promise<HistoricalData> {
   start.setDate(start.getDate() - 7);
 
   const params = new URLSearchParams({
-    latitude: '42.6589',
-    longitude: '13.7036',
+    latitude: String(lat),
+    longitude: String(lon),
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum',
     timezone: 'Europe/Rome',
     start_date: fmt(start),

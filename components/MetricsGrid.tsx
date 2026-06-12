@@ -25,11 +25,15 @@ function Card({
 }
 
 export default function MetricsGrid({ current }: Props) {
-  const dir = windDir(current.wind_direction_10m);
-  const uv  = current.uv_index;
+  const dir    = windDir(current.wind_direction_10m);
+  const uv     = current.uv_index;
+  const visKm  = (current.visibility / 1000).toFixed(1);
+  const snowSub = current.snow_depth > 0
+    ? `Neve: ${(current.snow_depth * 100).toFixed(0)} cm`
+    : undefined;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       <Card
         icon="💧"
         label="Umidità"
@@ -64,6 +68,22 @@ export default function MetricsGrid({ current }: Props) {
         label="Direzione"
         value={dir}
         sub={`${Math.round(current.wind_direction_10m)}°`}
+      />
+      <Card
+        icon="👁️"
+        label="Visibilità"
+        value={`${visKm} km`}
+      />
+      <Card
+        icon="⛅"
+        label="Nuvolosità"
+        value={`${current.cloud_cover}%`}
+      />
+      <Card
+        icon="❄️"
+        label="Zero termico"
+        value={`${Math.round(current.freezing_level_height)} m`}
+        sub={snowSub}
       />
     </div>
   );

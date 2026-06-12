@@ -9,10 +9,10 @@ export interface AirQualityData {
   };
 }
 
-export async function fetchAirQuality(): Promise<AirQualityData> {
+export async function fetchAirQuality(lat: number, lon: number): Promise<AirQualityData> {
   const params = new URLSearchParams({
-    latitude: '42.6589',
-    longitude: '13.7036',
+    latitude: String(lat),
+    longitude: String(lon),
     current: 'european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone',
     timezone: 'Europe/Rome',
   });

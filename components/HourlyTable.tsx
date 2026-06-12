@@ -6,10 +6,14 @@ import { fmtDay } from '@/lib/weatherUtils';
 interface HourlyPoint {
   time: string;
   temperature_2m: number;
+  apparent_temperature: number;
+  dew_point_2m: number;
   relative_humidity_2m: number;
   precipitation_probability: number;
   precipitation: number;
   wind_speed_10m: number;
+  cloud_cover: number;
+  uv_index: number;
 }
 
 interface Props {
@@ -53,13 +57,17 @@ export default function HourlyTable({ data }: Props) {
 
             {open === day && (
               <div className="mt-1 rounded-xl overflow-x-auto border border-white/5">
-                <table className="w-full text-sm min-w-[480px]">
+                <table className="w-full text-sm min-w-[700px]">
                   <thead>
                     <tr className="bg-white/5 text-slate-400 text-xs uppercase tracking-wider">
                       <th className="px-4 py-2.5 text-left">Ora</th>
                       <th className="px-3 py-2.5 text-right">Temp</th>
+                      <th className="px-3 py-2.5 text-right">Perc.</th>
+                      <th className="px-3 py-2.5 text-right">P.Rug.</th>
                       <th className="px-3 py-2.5 text-right">Umid.</th>
                       <th className="px-3 py-2.5 text-right">Vento</th>
+                      <th className="px-3 py-2.5 text-right">Nuv.</th>
+                      <th className="px-3 py-2.5 text-right">UV</th>
                       <th className="px-3 py-2.5 text-right">Pioggia</th>
                       <th className="px-3 py-2.5 text-right">Prob.</th>
                     </tr>
@@ -80,11 +88,23 @@ export default function HourlyTable({ data }: Props) {
                           <td className="px-3 py-2 text-right text-white font-medium tabular-nums">
                             {Math.round(h.temperature_2m)}°
                           </td>
+                          <td className="px-3 py-2 text-right text-slate-400 tabular-nums">
+                            {Math.round(h.apparent_temperature)}°
+                          </td>
+                          <td className="px-3 py-2 text-right text-cyan-400/70 tabular-nums">
+                            {Math.round(h.dew_point_2m)}°
+                          </td>
                           <td className="px-3 py-2 text-right text-slate-300 tabular-nums">
                             {h.relative_humidity_2m}%
                           </td>
                           <td className="px-3 py-2 text-right text-slate-300 tabular-nums">
                             {Math.round(h.wind_speed_10m)} km/h
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-400 tabular-nums">
+                            {h.cloud_cover}%
+                          </td>
+                          <td className="px-3 py-2 text-right text-yellow-400/80 tabular-nums">
+                            {h.uv_index.toFixed(1)}
                           </td>
                           <td className="px-3 py-2 text-right text-slate-300 tabular-nums">
                             {h.precipitation > 0 ? `${h.precipitation.toFixed(1)} mm` : '—'}

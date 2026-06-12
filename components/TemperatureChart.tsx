@@ -3,6 +3,7 @@
 import {
   ComposedChart,
   Area,
+  Line,
   Bar,
   XAxis,
   YAxis,
@@ -16,6 +17,7 @@ import { fmtHour } from '@/lib/weatherUtils';
 interface HourlyPoint {
   time: string;
   temperature_2m: number;
+  apparent_temperature: number;
   precipitation_probability: number;
   precipitation: number;
 }
@@ -35,7 +37,7 @@ function CustomTooltip({ active, payload, label }: {
       <p className="text-slate-400 mb-2">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }}>
-          {p.name}: <strong>{p.value}{p.name === 'Temperatura' ? '°C' : '%'}</strong>
+          {p.name}: <strong>{p.value}{p.name === 'Prob. pioggia' ? '%' : '°C'}</strong>
         </p>
       ))}
     </div>
@@ -50,6 +52,7 @@ export default function TemperatureChart({ data }: Props) {
   const chartData = data.map(d => ({
     ora: fmtHour(d.time),
     Temperatura: Math.round(d.temperature_2m * 10) / 10,
+    Percepita: Math.round(d.apparent_temperature * 10) / 10,
     'Prob. pioggia': d.precipitation_probability,
   }));
 
@@ -112,6 +115,16 @@ export default function TemperatureChart({ data }: Props) {
             fill="url(#tempGrad)"
             dot={false}
             activeDot={{ r: 4, fill: '#f97316', strokeWidth: 0 }}
+          />
+          <Line
+            yAxisId="temp"
+            type="monotone"
+            dataKey="Percepita"
+            stroke="#fb923c"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            dot={false}
+            activeDot={{ r: 3, fill: '#fb923c', strokeWidth: 0 }}
           />
         </ComposedChart>
       </ResponsiveContainer>
