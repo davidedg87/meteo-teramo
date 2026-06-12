@@ -1,6 +1,5 @@
 'use client';
 
-import 'leaflet/dist/leaflet.css';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, ZoomControl } from 'react-leaflet';
