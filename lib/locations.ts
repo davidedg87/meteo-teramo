@@ -47,7 +47,7 @@ const BY_SLUG = new Map(LOCATIONS.map(l => [l.slug, l]));
 export const HEAT_STATIONS: Location[] = LOCATIONS.filter(l => l.capoluogo);
 
 export const DEFAULT_LOCATION =
-  BY_SLUG.get('teramo') ?? BY_SLUG.get('roma') ?? LOCATIONS[0];
+  BY_SLUG.get('roma') ?? LOCATIONS[0];
 
 export function getLocation(slug: string | null | undefined): Location {
   if (!slug) return DEFAULT_LOCATION;

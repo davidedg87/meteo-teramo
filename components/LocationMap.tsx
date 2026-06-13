@@ -251,7 +251,7 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
   const [heatError, setHeatError] = useState(false);
 
   const goToComune = useCallback(
-    (slug: string) => router.push(slug === 'teramo' ? '/' : `/?loc=${slug}`),
+    (slug: string) => router.push(slug === 'roma' ? '/' : `/?loc=${slug}`),
     [router]
   );
 

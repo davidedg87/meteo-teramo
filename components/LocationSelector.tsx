@@ -16,7 +16,7 @@ function Pill({ slug, label, currentSlug, onSelect }: {
   currentSlug: string | null;
   onSelect: () => void;
 }) {
-  const href = slug === 'teramo' ? '/' : `/?loc=${slug}`;
+  const href = slug === 'roma' ? '/' : `/?loc=${slug}`;
   const active = slug === currentSlug;
   return (
     <Link
