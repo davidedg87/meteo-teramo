@@ -31,8 +31,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   if (hasCustomPos) return { title: 'Posizione personalizzata' };
   const loc = getLocation(searchParams.loc);
-  if (loc.slug === 'teramo') return {};
-  return { title: `Meteo ${loc.name}` };
+  if (!searchParams.loc) return {};
+  return { title: `${loc.name} (${loc.sigla})` };
 }
 
 export default async function Home({ searchParams }: PageProps) {
@@ -89,7 +89,7 @@ export default async function Home({ searchParams }: PageProps) {
   const cityName = loc ? loc.name : 'Posizione personalizzata';
   const subtitle = hasCustomPos
     ? `${customLat!.toFixed(4)}°N · ${customLon!.toFixed(4)}°E · ${elevation} m s.l.m.`
-    : (loc!.description ? `${loc!.description} · ${elevation} m s.l.m.` : `${elevation} m s.l.m.`);
+    : `${loc!.provincia} (${loc!.sigla}) · ${loc!.regione} · ${elevation} m s.l.m.`;
 
   const currentSlug = loc?.slug ?? null;
 
@@ -99,7 +99,7 @@ export default async function Home({ searchParams }: PageProps) {
 
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Meteo Provincia di Teramo</h1>
+            <h1 className="text-2xl font-bold text-white">Meteo Italia</h1>
             <p className="text-slate-300 text-base font-medium">{cityName}</p>
             <p className="text-slate-400 text-sm">{subtitle}</p>
           </div>

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
-import { LOCATIONS } from '@/lib/locations';
+import 'leaflet.markercluster';
+import { LOCATIONS, HEAT_STATIONS, type Zona } from '@/lib/locations';
 import { fetchCurrentTemperatures } from '@/lib/openmeteo';
 
 // Scala colore della temperatura: stop normalizzati 0..1 (freddo → caldo).
@@ -36,33 +37,41 @@ function heatColor(norm: number): [number, number, number] {
   return HEAT_STOPS[HEAT_STOPS.length - 1].rgb;
 }
 
-// Teramo province bounding box (with padding)
-const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
-  [42.37, 13.28],
-  [43.02, 14.22],
+// Italia (con un po' di margine).
+const ITALY_CENTER: [number, number] = [42.0, 12.5];
+const ITALY_BOUNDS: [[number, number], [number, number]] = [
+  [35.2, 6.4],
+  [47.3, 19.0],
 ];
 
-const ZONE_COLOR: Record<string, string> = {
-  costa:    '#3b82f6',
-  collina:  '#22c55e',
-  montagna: '#f97316',
+const ZONE_COLOR: Record<Zona, string> = {
+  pianura:  '#16a34a',
+  collina:  '#f59e0b',
+  montagna: '#78716c',
 };
 
-const ZONE_LABEL: { zone: keyof typeof ZONE_COLOR | string; label: string }[] = [
-  { zone: 'costa',    label: 'Costa' },
+const ZONE_LABEL: { zone: Zona; label: string }[] = [
+  { zone: 'pianura',  label: 'Pianura' },
   { zone: 'collina',  label: 'Collina' },
   { zone: 'montagna', label: 'Montagna' },
 ];
 
-function dot(color: string, active: boolean) {
-  const s = active ? 14 : 10;
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${color};border:${active ? '2.5px solid #fff' : '1.5px solid rgba(255,255,255,0.4)'};box-shadow:0 1px 5px rgba(0,0,0,0.55)"></div>`,
-    iconSize: [s, s],
-    iconAnchor: [s / 2, s / 2],
-    tooltipAnchor: [s / 2 + 2, 0],
-  });
+// Icone condivise per zona (riutilizzate da tutti i marker → niente 7.800 oggetti).
+const iconCache: Record<string, L.DivIcon> = {};
+function zoneIcon(zone: Zona, active: boolean): L.DivIcon {
+  const key = `${zone}-${active}`;
+  if (!iconCache[key]) {
+    const s = active ? 16 : 9;
+    const color = ZONE_COLOR[zone];
+    iconCache[key] = L.divIcon({
+      className: '',
+      html: `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${color};border:${active ? '2.5px solid #fff' : '1.5px solid rgba(255,255,255,0.45)'};box-shadow:0 1px 4px rgba(0,0,0,0.55)"></div>`,
+      iconSize: [s, s],
+      iconAnchor: [s / 2, s / 2],
+      tooltipAnchor: [s / 2 + 2, 0],
+    });
+  }
+  return iconCache[key];
 }
 
 function customDot() {
@@ -80,6 +89,53 @@ function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lon: number) =
   return null;
 }
 
+/**
+ * Tutti i comuni come marker raggruppati in cluster (leaflet.markercluster),
+ * così ~7.800 marker restano performanti. Il colore indica la zona altimetrica;
+ * al massimo zoom i cluster si aprono nei singoli comuni.
+ */
+function ClusterLayer({
+  currentSlug,
+  onSelect,
+}: {
+  currentSlug: string | null;
+  onSelect: (slug: string) => void;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const group = L.markerClusterGroup({
+      chunkedLoading: true,
+      maxClusterRadius: 55,
+      disableClusteringAtZoom: 11,
+      spiderfyOnMaxZoom: false,
+      showCoverageOnHover: false,
+    });
+
+    const markers = LOCATIONS.map(loc => {
+      const m = L.marker([loc.lat, loc.lon], {
+        icon: zoneIcon(loc.zone, loc.slug === currentSlug),
+      });
+      (m.options as L.MarkerOptions & { slug?: string }).slug = loc.slug;
+      m.bindTooltip(
+        `<span style="font-weight:500">${loc.name}</span> <span style="font-size:10px;color:#64748b">${loc.sigla} · ${loc.elevation} m</span>`,
+        { direction: 'top', offset: [0, -4], opacity: 1 }
+      );
+      return m;
+    });
+    group.addLayers(markers);
+    group.on('click', e => {
+      const slug = (e.layer.options as L.MarkerOptions & { slug?: string }).slug;
+      if (slug) onSelect(slug);
+    });
+
+    map.addLayer(group);
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [map, currentSlug, onSelect]);
+  return null;
+}
+
 interface Station {
   lat: number;
   lon: number;
@@ -87,10 +143,10 @@ interface Station {
 }
 
 /**
- * Superficie di temperatura interpolata con IDW (Inverse Distance Weighting).
- * A differenza di una heatmap di densità, il colore di ogni punto dipende solo
- * dalle temperature delle stazioni vicine e NON da quante stazioni ci sono:
- * così la costa non risulta "fredda" solo perché ha meno comuni della collina.
+ * Superficie di temperatura interpolata con IDW (Inverse Distance Weighting)
+ * a partire dai ~107 capoluoghi di provincia. Il colore di ogni punto dipende
+ * solo dalle temperature delle città vicine, non da quante ce ne sono: niente
+ * artefatti di densità.
  */
 function InterpolatedHeat({
   stations,
@@ -105,13 +161,13 @@ function InterpolatedHeat({
   useEffect(() => {
     if (stations.length === 0) return;
 
-    const margin = 0.045;
+    const margin = 0.25;
     const south = Math.min(...stations.map(s => s.lat)) - margin;
     const north = Math.max(...stations.map(s => s.lat)) + margin;
     const west = Math.min(...stations.map(s => s.lon)) - margin;
     const east = Math.max(...stations.map(s => s.lon)) + margin;
 
-    const W = 240;
+    const W = 360;
     const H = Math.max(1, Math.round((W * (north - south)) / (east - west)));
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -122,7 +178,9 @@ function InterpolatedHeat({
 
     const range = max - min || 1;
     const latScale = 111; // km per grado di latitudine
-    const POWER = 2;      // esponente IDW (più alto = più locale)
+    const POWER = 2;
+    const FULL_KM = 45;   // alpha piena entro questa distanza dalla città più vicina
+    const ZERO_KM = 95;   // oltre questa distanza, trasparente (mare aperto)
 
     for (let y = 0; y < H; y++) {
       const lat = north - ((y + 0.5) / H) * (north - south);
@@ -136,7 +194,7 @@ function InterpolatedHeat({
         for (const s of stations) {
           const dy = (lat - s.lat) * latScale;
           const dx = (lon - s.lon) * lonScale;
-          const d2 = dx * dx + dy * dy; // km^2
+          const d2 = dx * dx + dy * dy;
           if (d2 < nearestKm2) nearestKm2 = d2;
           if (d2 < 1e-4) {
             num = s.temp;
@@ -152,11 +210,10 @@ function InterpolatedHeat({
         const t = den > 0 ? num / den : min;
         const [r, g, b] = heatColor((t - min) / range);
 
-        // Sfuma a trasparente lontano dalle stazioni (mare, bordi senza dati).
         const distKm = Math.sqrt(nearestKm2);
-        let a = 0.62;
-        if (distKm > 9) a = 0;
-        else if (distKm > 6) a *= (9 - distKm) / 3;
+        let a = 0.6;
+        if (distKm > ZERO_KM) a = 0;
+        else if (distKm > FULL_KM) a *= (ZERO_KM - distKm) / (ZERO_KM - FULL_KM);
 
         const idx = (y * W + x) * 4;
         img.data[idx] = r;
@@ -193,11 +250,16 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
   const [loadingHeat, setLoadingHeat] = useState(false);
   const [heatError, setHeatError] = useState(false);
 
-  // Carica le temperature correnti di tutti i comuni solo quando serve.
+  const goToComune = useCallback(
+    (slug: string) => router.push(slug === 'teramo' ? '/' : `/?loc=${slug}`),
+    [router]
+  );
+
+  // Carica le temperature dei ~107 capoluoghi solo quando serve.
   useEffect(() => {
     if (!heatOn || temps !== null || loadingHeat || heatError) return;
     setLoadingHeat(true);
-    fetchCurrentTemperatures(LOCATIONS.map(l => ({ lat: l.lat, lon: l.lon })))
+    fetchCurrentTemperatures(HEAT_STATIONS.map(l => ({ lat: l.lat, lon: l.lon })))
       .then(setTemps)
       .catch(() => setHeatError(true))
       .finally(() => setLoadingHeat(false));
@@ -205,7 +267,7 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
 
   const heatData = useMemo(() => {
     if (!temps) return { stations: [] as Station[], min: 0, max: 0 };
-    const stations = LOCATIONS.reduce<Station[]>((acc, l, i) => {
+    const stations = HEAT_STATIONS.reduce<Station[]>((acc, l, i) => {
       const t = temps[i];
       if (typeof t === 'number' && !isNaN(t)) {
         acc.push({ lat: l.lat, lon: l.lon, temp: t });
@@ -225,13 +287,13 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
         onClick={() => setIsOpen(o => !o)}
         className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-400 hover:text-white transition-colors"
       >
-        <span>Mappa della provincia</span>
+        <span>Mappa d&apos;Italia</span>
         <span className="text-slate-600 text-xs">{isOpen ? '▲ Chiudi' : '▼ Espandi'}</span>
       </button>
 
       {isOpen && (
         <>
-          <div style={{ height: 300 }} className="relative border-t border-white/5">
+          <div style={{ height: 380 }} className="relative border-t border-white/5">
             <div
               className="absolute bottom-2 left-2 z-[1000] flex flex-col gap-1 rounded-lg bg-slate-900/80 backdrop-blur-sm px-2.5 py-2 border border-white/10"
               style={{ pointerEvents: 'none' }}
@@ -293,10 +355,10 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
             )}
 
             <MapContainer
-              center={[42.66, 13.70]}
-              zoom={10}
-              minZoom={9}
-              maxBounds={PROVINCE_BOUNDS}
+              center={ITALY_CENTER}
+              zoom={6}
+              minZoom={5}
+              maxBounds={ITALY_BOUNDS}
               maxBoundsViscosity={1.0}
               style={{ height: '100%', width: '100%' }}
               zoomControl={false}
@@ -315,27 +377,13 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
                 />
               )}
 
+              <ClusterLayer currentSlug={currentSlug} onSelect={goToComune} />
+
               <ClickHandler
                 onMapClick={(lat, lon) =>
                   router.push(`/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
                 }
               />
-
-              {LOCATIONS.map(loc => (
-                <Marker
-                  key={loc.slug}
-                  position={[loc.lat, loc.lon]}
-                  icon={dot(ZONE_COLOR[loc.zone], loc.slug === currentSlug)}
-                  eventHandlers={{
-                    click: () => router.push(loc.slug === 'teramo' ? '/' : `/?loc=${loc.slug}`),
-                  }}
-                >
-                  <Tooltip direction="top" offset={[0, -4]} opacity={1}>
-                    <span style={{ fontSize: 12, fontWeight: 500 }}>{loc.name}</span>
-                    <span style={{ fontSize: 10, color: '#64748b', marginLeft: 4 }}>{loc.elevation} m</span>
-                  </Tooltip>
-                </Marker>
-              ))}
 
               {customLat != null && customLon != null && (
                 <Marker position={[customLat, customLon]} icon={customDot()}>
@@ -349,7 +397,7 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
             </MapContainer>
           </div>
           <p className="text-slate-600 text-xs text-center py-1.5 border-t border-white/5">
-            Clicca su un marker per i comuni · Clicca su un punto qualsiasi per previsioni personalizzate
+            Clicca un comune per le previsioni · Clicca un punto qualsiasi per previsioni personalizzate
           </p>
         </>
       )}

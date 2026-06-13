@@ -6,13 +6,13 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
-    default: 'Meteo Teramo e Provincia',
-    template: '%s — Provincia di Teramo',
+    default: 'Meteo Italia',
+    template: '%s — Meteo Italia',
   },
-  description: 'Dati meteo in tempo reale per Teramo e tutti i comuni della provincia: costa adriatica, collina e Gran Sasso',
+  description: 'Dati meteo in tempo reale per tutti i comuni italiani: temperatura, vento, pioggia e mappa di calore nazionale',
   openGraph: {
-    title: 'Meteo Teramo e Provincia',
-    description: 'Temperatura, vento, pioggia e previsioni per tutta la provincia di Teramo',
+    title: 'Meteo Italia',
+    description: 'Temperatura, vento, pioggia e previsioni per tutti i comuni d\'Italia',
     locale: 'it_IT',
     type: 'website',
   },

@@ -1,22 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { LOCATIONS } from '@/lib/locations';
+import { LOCATIONS, HEAT_STATIONS } from '@/lib/locations';
 
-const ZONE_META: Record<string, { label: string; icon: string }> = {
-  costa:    { label: 'Costa',    icon: '🌊' },
-  collina:  { label: 'Collina',  icon: '⛰️' },
-  montagna: { label: 'Montagna', icon: '🏔️' },
-};
+const MAX_RESULTS = 60;
 
 interface Props {
   currentSlug: string | null;
 }
 
-function Pill({ slug, name, currentSlug, onSelect }: {
+function Pill({ slug, label, currentSlug, onSelect }: {
   slug: string;
-  name: string;
+  label: string;
   currentSlug: string | null;
   onSelect: () => void;
 }) {
@@ -32,7 +28,7 @@ function Pill({ slug, name, currentSlug, onSelect }: {
           : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
       }`}
     >
-      {name}
+      {label}
     </Link>
   );
 }
@@ -40,13 +36,30 @@ function Pill({ slug, name, currentSlug, onSelect }: {
 export default function LocationSelector({ currentSlug }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const zones = ['costa', 'collina', 'montagna'] as const;
 
-  const currentLoc = LOCATIONS.find(l => l.slug === currentSlug);
+  const currentLoc = useMemo(
+    () => LOCATIONS.find(l => l.slug === currentSlug),
+    [currentSlug]
+  );
+
   const query = search.toLowerCase().trim();
-  const filtered = query
-    ? LOCATIONS.filter(l => l.name.toLowerCase().includes(query))
-    : null;
+  const results = useMemo(() => {
+    if (!query) return null;
+    const out = [];
+    for (const l of LOCATIONS) {
+      if (l.name.toLowerCase().includes(query)) {
+        out.push(l);
+        if (out.length >= MAX_RESULTS + 1) break;
+      }
+    }
+    return out;
+  }, [query]);
+
+  // Senza ricerca mostro i capoluoghi come scorciatoie.
+  const capoluoghi = useMemo(
+    () => [...HEAT_STATIONS].sort((a, b) => a.name.localeCompare(b.name, 'it')),
+    []
+  );
 
   function close() {
     setSearch('');
@@ -61,7 +74,11 @@ export default function LocationSelector({ currentSlug }: Props) {
       >
         <span className="text-slate-500 text-xs">Cambia località</span>
         <span className="flex items-center gap-2">
-          {currentLoc && <span className="text-blue-300 text-xs font-medium">{currentLoc.name}</span>}
+          {currentLoc && (
+            <span className="text-blue-300 text-xs font-medium">
+              {currentLoc.name} ({currentLoc.sigla})
+            </span>
+          )}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -78,39 +95,50 @@ export default function LocationSelector({ currentSlug }: Props) {
           <input
             autoFocus
             type="text"
-            placeholder="Cerca una località della provincia…"
+            placeholder="Cerca un comune italiano…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-400/40 transition-colors"
           />
 
-          {filtered ? (
+          {results ? (
             <div className="flex flex-wrap gap-1.5">
-              {filtered.length === 0 ? (
+              {results.length === 0 ? (
                 <p className="text-slate-500 text-xs py-1">Nessun risultato per &ldquo;{search}&rdquo;</p>
               ) : (
-                filtered.map(loc => (
-                  <Pill key={loc.slug} slug={loc.slug} name={loc.name} currentSlug={currentSlug} onSelect={close} />
-                ))
+                <>
+                  {results.slice(0, MAX_RESULTS).map(loc => (
+                    <Pill
+                      key={loc.slug}
+                      slug={loc.slug}
+                      label={`${loc.name} (${loc.sigla})`}
+                      currentSlug={currentSlug}
+                      onSelect={close}
+                    />
+                  ))}
+                  {results.length > MAX_RESULTS && (
+                    <span className="text-slate-500 text-xs py-1 self-center">
+                      …affina la ricerca
+                    </span>
+                  )}
+                </>
               )}
             </div>
           ) : (
-            zones.map(zone => {
-              const meta = ZONE_META[zone];
-              const locs = LOCATIONS.filter(l => l.zone === zone);
-              return (
-                <div key={zone} className="flex items-start gap-3">
-                  <span className="text-slate-500 text-xs pt-1.5 w-20 shrink-0">
-                    {meta.icon} {meta.label}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {locs.map(loc => (
-                      <Pill key={loc.slug} slug={loc.slug} name={loc.name} currentSlug={currentSlug} onSelect={close} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })
+            <div className="space-y-1.5">
+              <p className="text-slate-500 text-[11px]">Capoluoghi</p>
+              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                {capoluoghi.map(loc => (
+                  <Pill
+                    key={loc.slug}
+                    slug={loc.slug}
+                    label={loc.name}
+                    currentSlug={currentSlug}
+                    onSelect={close}
+                  />
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
