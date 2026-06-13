@@ -53,6 +53,31 @@ export interface WeatherData {
   };
 }
 
+/**
+ * Recupera la temperatura corrente per più coordinate in un'unica chiamata.
+ * Open-Meteo accetta liste di lat/lon e risponde con un array (un oggetto se è
+ * una sola coordinata). L'ordine dei risultati rispecchia quello dei punti.
+ */
+export async function fetchCurrentTemperatures(
+  points: { lat: number; lon: number }[]
+): Promise<number[]> {
+  if (points.length === 0) return [];
+
+  const params = new URLSearchParams({
+    latitude: points.map(p => p.lat).join(','),
+    longitude: points.map(p => p.lon).join(','),
+    current: 'temperature_2m',
+    timezone: 'Europe/Rome',
+  });
+
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+  if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+
+  const data = await res.json();
+  const arr = Array.isArray(data) ? data : [data];
+  return arr.map((d: { current: { temperature_2m: number } }) => d.current.temperature_2m);
+}
+
 export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
   const params = new URLSearchParams({
     latitude: String(lat),

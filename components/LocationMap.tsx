@@ -1,10 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { LOCATIONS } from '@/lib/locations';
+import { fetchCurrentTemperatures } from '@/lib/openmeteo';
+
+// Scala colore della temperatura: stop normalizzati 0..1 (freddo → caldo).
+const HEAT_STOPS: { at: number; rgb: [number, number, number] }[] = [
+  { at: 0.0,  rgb: [37, 99, 235] },   // #2563eb blu
+  { at: 0.4,  rgb: [34, 197, 94] },   // #22c55e verde
+  { at: 0.65, rgb: [234, 179, 8] },   // #eab308 giallo
+  { at: 0.85, rgb: [249, 115, 22] },  // #f97316 arancione
+  { at: 1.0,  rgb: [239, 68, 68] },   // #ef4444 rosso
+];
+
+const HEAT_CSS_GRADIENT =
+  'linear-gradient(to right, #2563eb, #22c55e, #eab308, #f97316, #ef4444)';
+
+function heatColor(norm: number): [number, number, number] {
+  const n = Math.max(0, Math.min(1, norm));
+  for (let i = 1; i < HEAT_STOPS.length; i++) {
+    const a = HEAT_STOPS[i - 1];
+    const b = HEAT_STOPS[i];
+    if (n <= b.at) {
+      const t = (n - a.at) / (b.at - a.at);
+      return [
+        Math.round(a.rgb[0] + (b.rgb[0] - a.rgb[0]) * t),
+        Math.round(a.rgb[1] + (b.rgb[1] - a.rgb[1]) * t),
+        Math.round(a.rgb[2] + (b.rgb[2] - a.rgb[2]) * t),
+      ];
+    }
+  }
+  return HEAT_STOPS[HEAT_STOPS.length - 1].rgb;
+}
 
 // Teramo province bounding box (with padding)
 const PROVINCE_BOUNDS: [[number, number], [number, number]] = [
@@ -17,6 +47,12 @@ const ZONE_COLOR: Record<string, string> = {
   collina:  '#22c55e',
   montagna: '#f97316',
 };
+
+const ZONE_LABEL: { zone: keyof typeof ZONE_COLOR | string; label: string }[] = [
+  { zone: 'costa',    label: 'Costa' },
+  { zone: 'collina',  label: 'Collina' },
+  { zone: 'montagna', label: 'Montagna' },
+];
 
 function dot(color: string, active: boolean) {
   const s = active ? 14 : 10;
@@ -44,6 +80,105 @@ function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lon: number) =
   return null;
 }
 
+interface Station {
+  lat: number;
+  lon: number;
+  temp: number;
+}
+
+/**
+ * Superficie di temperatura interpolata con IDW (Inverse Distance Weighting).
+ * A differenza di una heatmap di densità, il colore di ogni punto dipende solo
+ * dalle temperature delle stazioni vicine e NON da quante stazioni ci sono:
+ * così la costa non risulta "fredda" solo perché ha meno comuni della collina.
+ */
+function InterpolatedHeat({
+  stations,
+  min,
+  max,
+}: {
+  stations: Station[];
+  min: number;
+  max: number;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (stations.length === 0) return;
+
+    const margin = 0.045;
+    const south = Math.min(...stations.map(s => s.lat)) - margin;
+    const north = Math.max(...stations.map(s => s.lat)) + margin;
+    const west = Math.min(...stations.map(s => s.lon)) - margin;
+    const east = Math.max(...stations.map(s => s.lon)) + margin;
+
+    const W = 240;
+    const H = Math.max(1, Math.round((W * (north - south)) / (east - west)));
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const img = ctx.createImageData(W, H);
+
+    const range = max - min || 1;
+    const latScale = 111; // km per grado di latitudine
+    const POWER = 2;      // esponente IDW (più alto = più locale)
+
+    for (let y = 0; y < H; y++) {
+      const lat = north - ((y + 0.5) / H) * (north - south);
+      const lonScale = 111 * Math.cos((lat * Math.PI) / 180);
+      for (let x = 0; x < W; x++) {
+        const lon = west + ((x + 0.5) / W) * (east - west);
+
+        let num = 0;
+        let den = 0;
+        let nearestKm2 = Infinity;
+        for (const s of stations) {
+          const dy = (lat - s.lat) * latScale;
+          const dx = (lon - s.lon) * lonScale;
+          const d2 = dx * dx + dy * dy; // km^2
+          if (d2 < nearestKm2) nearestKm2 = d2;
+          if (d2 < 1e-4) {
+            num = s.temp;
+            den = 1;
+            nearestKm2 = 0;
+            break;
+          }
+          const w = 1 / Math.pow(d2, POWER / 2);
+          num += w * s.temp;
+          den += w;
+        }
+
+        const t = den > 0 ? num / den : min;
+        const [r, g, b] = heatColor((t - min) / range);
+
+        // Sfuma a trasparente lontano dalle stazioni (mare, bordi senza dati).
+        const distKm = Math.sqrt(nearestKm2);
+        let a = 0.62;
+        if (distKm > 9) a = 0;
+        else if (distKm > 6) a *= (9 - distKm) / 3;
+
+        const idx = (y * W + x) * 4;
+        img.data[idx] = r;
+        img.data[idx + 1] = g;
+        img.data[idx + 2] = b;
+        img.data[idx + 3] = Math.round(a * 255);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const overlay = L.imageOverlay(canvas.toDataURL(), [
+      [south, west],
+      [north, east],
+    ], { opacity: 1, interactive: false });
+    overlay.addTo(map);
+    return () => {
+      map.removeLayer(overlay);
+    };
+  }, [map, stations, min, max]);
+  return null;
+}
+
 interface Props {
   currentSlug: string | null;
   customLat?: number | null;
@@ -53,6 +188,36 @@ interface Props {
 export default function LocationMap({ currentSlug, customLat, customLon }: Props) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [heatOn, setHeatOn] = useState(false);
+  const [temps, setTemps] = useState<number[] | null>(null);
+  const [loadingHeat, setLoadingHeat] = useState(false);
+  const [heatError, setHeatError] = useState(false);
+
+  // Carica le temperature correnti di tutti i comuni solo quando serve.
+  useEffect(() => {
+    if (!heatOn || temps !== null || loadingHeat || heatError) return;
+    setLoadingHeat(true);
+    fetchCurrentTemperatures(LOCATIONS.map(l => ({ lat: l.lat, lon: l.lon })))
+      .then(setTemps)
+      .catch(() => setHeatError(true))
+      .finally(() => setLoadingHeat(false));
+  }, [heatOn, temps, loadingHeat, heatError]);
+
+  const heatData = useMemo(() => {
+    if (!temps) return { stations: [] as Station[], min: 0, max: 0 };
+    const stations = LOCATIONS.reduce<Station[]>((acc, l, i) => {
+      const t = temps[i];
+      if (typeof t === 'number' && !isNaN(t)) {
+        acc.push({ lat: l.lat, lon: l.lon, temp: t });
+      }
+      return acc;
+    }, []);
+    if (stations.length === 0) return { stations, min: 0, max: 0 };
+    const values = stations.map(s => s.temp);
+    return { stations, min: Math.min(...values), max: Math.max(...values) };
+  }, [temps]);
+
+  const heatActive = heatOn && heatData.stations.length > 0;
 
   return (
     <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 overflow-hidden">
@@ -66,7 +231,67 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
 
       {isOpen && (
         <>
-          <div style={{ height: 300 }} className="border-t border-white/5">
+          <div style={{ height: 300 }} className="relative border-t border-white/5">
+            <div
+              className="absolute bottom-2 left-2 z-[1000] flex flex-col gap-1 rounded-lg bg-slate-900/80 backdrop-blur-sm px-2.5 py-2 border border-white/10"
+              style={{ pointerEvents: 'none' }}
+            >
+              {ZONE_LABEL.map(({ zone, label }) => (
+                <div key={zone} className="flex items-center gap-1.5">
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: ZONE_COLOR[zone],
+                      border: '1.5px solid rgba(255,255,255,0.5)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span className="text-[11px] leading-none text-slate-200">{label}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setHeatOn(o => !o)}
+              className={`absolute top-2 right-2 z-[1000] flex items-center gap-1.5 rounded-lg backdrop-blur-sm px-2.5 py-1.5 border text-[11px] transition-colors ${
+                heatOn
+                  ? 'bg-orange-500/80 border-orange-300/40 text-white'
+                  : 'bg-slate-900/80 border-white/10 text-slate-200 hover:bg-slate-800/80'
+              }`}
+            >
+              <span>🌡️</span>
+              <span>{loadingHeat ? 'Calore…' : heatOn ? 'Calore attivo' : 'Mappa calore'}</span>
+            </button>
+
+            {heatActive && (
+              <div
+                className="absolute top-12 right-2 z-[1000] rounded-lg bg-slate-900/80 backdrop-blur-sm px-2.5 py-2 border border-white/10"
+                style={{ pointerEvents: 'none' }}
+              >
+                <div
+                  style={{
+                    width: 96,
+                    height: 8,
+                    borderRadius: 4,
+                    background: HEAT_CSS_GRADIENT,
+                  }}
+                />
+                <div className="mt-1 flex justify-between text-[10px] leading-none text-slate-300">
+                  <span>{Math.round(heatData.min)}°</span>
+                  <span>Temp. attuale</span>
+                  <span>{Math.round(heatData.max)}°</span>
+                </div>
+              </div>
+            )}
+
+            {heatError && heatOn && (
+              <div className="absolute top-12 right-2 z-[1000] rounded-lg bg-slate-900/80 backdrop-blur-sm px-2.5 py-1.5 border border-white/10 text-[10px] text-slate-300">
+                Temperature non disponibili
+              </div>
+            )}
+
             <MapContainer
               center={[42.66, 13.70]}
               zoom={10}
@@ -81,6 +306,14 @@ export default function LocationMap({ currentSlug, customLat, customLon }: Props
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>'
               />
+
+              {heatActive && (
+                <InterpolatedHeat
+                  stations={heatData.stations}
+                  min={heatData.min}
+                  max={heatData.max}
+                />
+              )}
 
               <ClickHandler
                 onMapClick={(lat, lon) =>
